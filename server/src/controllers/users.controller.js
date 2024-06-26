@@ -6,7 +6,7 @@ export const getUsers = (req, res) => {
 
   pool
     .query("SELECT * FROM users")
-    .then((results) => {
+    .then(([results]) => {
       console.log("Mostrando usuarios");
       res.json(results); // Send results on success
     })
