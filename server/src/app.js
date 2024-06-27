@@ -12,15 +12,18 @@ app.use(bodyParser.json());
 app.post("/api", loginRouter);
 app.get("/api/users", usersRouter);
 app.post("/api/users", usersRouter);
-app.post("/api/user_info", usersInfoRouter);
-app.get("/api/user_info/:id", usersInfoRouter);
-app.put("/api/user_info/:id", usersInfoRouter);
-app.delete("/api/user_info/:id", usersInfoRouter);
+// app.post("/api/user_info", usersInfoRouter);
+// app.get("/api/user_info/:id/:nombre", usersInfoRouter);
+// app.put("/api/user_info/:id", usersInfoRouter);
+// app.delete("/api/user_info/:id", usersInfoRouter);
+app.use("/api", usersInfoRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({
     message: "Endpoint not found",
   });
+
+  console.log("Endpoint not found" + req.url);
 });
 
 export default app;

@@ -6,25 +6,33 @@ import { JWT_SECRET } from "../config.js";
 export const getUserInfo = (req, res) => {
   // Logic to get user info
   console.log("Get user info");
+  let valores = [];
+  let filtros = "1 = 1";
+  // console.log(req);
+  for (const param in req.query) {
+    if (req.query.hasOwnProperty(param)) {
+      const paramName = param === "id" ? "user_id" : param;
+      const paramValue = req.query[param];
+      filtros += ` AND ${paramName} LIKE '%${paramValue}%'`;
+      valores.push(paramValue);
+    }
+  }
+  
+  let query = `SELECT * FROM user_info WHERE ${filtros}`;
+  console.log(query)
+  
 
-  const user_id = req.params.id;
-  console.log(req.params);
-
+  console.log(`Query: ${query}`);
+  console.log(`valores: ${valores}`);
+  console.log(`filtros: ${filtros}`);
+  // return;
   pool
-    .query("SELECT * FROM user_info where user_id = ?", [user_id])
+    .query(query, valores)
     .then(([results]) => {
-      if (results.length == 0) {
-        console.log("User info not found");
-        return res
-          .status(404)
-          .json({ error: 1, message: "User info not found" });
-      }
-      console.log("Showing user info");
-      console.log(results);
-      res.json({ error: 0, data: results }); // Send results on success
+      res.json({ error: 0, message: "User info retrieved successfully", data: results });
     })
     .catch((error) => {
-      res.status(500).json({ error: 1, message: "Error getting user info" });
+      res.status(500).json({ error: 1, message: "Error retrieving user info" });
       console.error(error); // Log the actual error
     });
 };
@@ -38,7 +46,7 @@ export const createUserInfo = (req, res) => {
 
   // Si el token viene con el prefijo 'Bearer ', necesitas removerlo para obtener solo el token
   const accessToken = token && token.startsWith("Bearer ") ? token.slice(7) : token;
-  console.log(accessToken);
+  // console.log(accessToken);
   // res.json({token: accessToken})
   // return;
   const { full_name, phone } = req.body;
@@ -49,101 +57,140 @@ export const createUserInfo = (req, res) => {
     const user_id = decodedToken.id;
     // console.log(decodedToken)
 
-    pool
-      .query(
-        "INSERT INTO user_info (user_id, full_name, phone) VALUES (?, ?, ?)",
-        [user_id, full_name, phone]
-      )
-      .then((results) => {
-        res.json({
-          error: 0,
-          message: "User info created successfully",
-          data: results,
-        });
-      })
-      .catch((error) => {
+    let columnas = "?, ";
+    let columnasNombre = "user_id, ";
+    let valores = [];
+    valores.push(user_id);
+    let coma = "";
+    for (const property in req.body) {
+      console.log(`${property}: ${req.body[property]}`);
+      columnas += `${coma}?`;
+      columnasNombre += `${coma}${property}`;
+      valores.push(req.body[property]);
+      coma = ', ';
+    }
+
+    let query = `INSERT INTO user_info (${columnasNombre}) VALUES (${columnas})`
+
+    console.log(`columnas: ${columnas}`)
+    console.log(`valores: ${valores}`)
+    console.log(`query: ${query}`)
+    
+    
+
+    pool.query(query, valores)
+      .then(([results]) => {
+        if (results.affectedRows != 0) {
+          res.json({ error: 0, message: "User info created successfully", data: results});
+        } else {
+          throw new Error("Error creating user info");
+        }
+          }).catch((error) => {
         res.status(500).json({ error: 1, message: "Error creating user info" });
         console.error(error); // Log the actual error
       });
-  } catch (error) {
-    res.status(401).json({ error: 1, message: "Invalid access token" });
-    console.error(error);
+    } catch (error) {
+    res.status(401).json({ error: 1, message: "Invalid token" });
+    console.error(error); // Log the actual error
   }
 };
 
 export const updateUserInfo = (req, res) => {
-    console.log("Update user info");
-  
-    const info_id = req.params.id; // Access user_id from URL params
-    const { full_name, phone } = req.body; // Destructure full_name and phone from the request body
-    
-    if (!full_name && !phone) {
-        return res.status(400).json({ error: 1, message: "Full name or phone is required" });
-    }
+  console.log("Update user info");
 
-    let defaultQuery = "UPDATE user_info SET full_name = ?, phone = ? WHERE id = ?";
-    
-    if (full_name && !phone) {
-        defaultQuery = "UPDATE user_info SET full_name = ? WHERE id = ?";
+  const info_id = req.query.id; // Access user_id from URL params
+  const { full_name, phone } = req.body; // Destructure full_name and phone from the request body
+  console.log(`body` + req.body);
 
-        pool.query(defaultQuery, [full_name, info_id])
-        .then((results) => {
-            console.log('Actualizando nombre')
-          res.json({ error: 0, message: "User info updated successfully", data: results });
-        }).catch((error) => {
-            res.status(500).json({ error: 1, message: "Error updating user info (full_name)" });
-            console.error(error); // Log the actual error
-        });
-        return;
-    }
+  let columnas = "";
+  let valores = [];
+  let valoresNombre = [];
+  let coma = "";
+  // Recorrer el objeto req.body
+  for (const property in req.body) {
+    console.log(`${property}: ${req.body[property]}`);
+    columnas += `${coma}${property} = ? `;
+    valores.push(req.body[property]);
+    valoresNombre.push(property);
+    coma = ", ";
+  }
+  console.log(`columnas ${columnas}`);
+  console.log(`valores ${valores}`);
+  // if (!full_name && !phone) {
+  //     return res.status(400).json({ error: 1, message: "Full name or phone is required" });
+  // }
 
-    if (phone && !full_name) {
-        
-        defaultQuery = "UPDATE user_info SET phone = ? WHERE id = ?";
-        
-        pool.query(defaultQuery, [phone, info_id])
-        .then((results) => {
-            console.log('Actualizando telefono')
-          res.json({ error: 0, message: "User info updated successfully", data: results });
-        }).catch((error) => {
-            res.status(500).json({ error: 1, message: "Error updating user info (phone)" });
-            console.error(error); // Log the actual error
-        });
-        return;
-    }
-    
+  if (valores.length == 0) {
+    console.log("No hay valores");
+    return res
+      .status(400)
+      .json({ error: 1, message: "Full name or phone is required" });
+  }
 
-    pool.query(defaultQuery, [full_name, phone, info_id])
-      .then(([results]) => {
-        if (results.affectedRows != 0) {
-            console.log('Actualizando nombre y telefono')
-            return res.json({ error: 0, message: "User info updated successfully", data: results });
-        } else {
-            return res.status(404).json({ error: 1, message: "User info not found" });
-        }
-      })
-      .catch((error) => {
-        res.status(500).json({ error: 1, message: "Error updating user info" });
-        console.error(error); // Log the actual error
+  valores.push(info_id);
+  console.log(`valores ${valores}`);
+  let defaultQuery = `UPDATE user_info SET ${columnas} WHERE id = ?`;
+
+  // if (full_name && !phone) {
+  //     defaultQuery = "UPDATE user_info SET full_name = ? WHERE id = ?";
+
+  pool
+    .query(defaultQuery, valores)
+    .then((results) => {
+      console.log(`Actualizando ${valoresNombre.map((val) => `${val}`)}`);
+      res.json({
+        error: 0,
+        message: "User info updated successfully",
+        data: results,
       });
-  };
+    })
+    .catch((error) => {
+      res
+        .status(500)
+        .json({ error: 1, message: "Error updating user info (full_name)" });
+      console.error(error); // Log the actual error
+    });
+  
+  // }
+
+  // if (phone && !full_name) {
+
+  //     defaultQuery = "UPDATE user_info SET phone = ? WHERE id = ?";
+
+  //     pool.query(defaultQuery, [phone, info_id])
+  //     .then((results) => {
+  //         console.log('Actualizando telefono')
+  //       res.json({ error: 0, message: "User info updated successfully", data: results });
+  //     }).catch((error) => {
+  //         res.status(500).json({ error: 1, message: "Error updating user info (phone)" });
+  //         console.error(error); // Log the actual error
+  //     });
+  //     return;
+  // }
+};
 
 export const deleteUserInfo = (req, res) => {
   // Logic to delete user info
   console.log("Delete user info");
 
-    const info_id = req.params.id; // Access user_id from URL params
-
-    pool.query("DELETE FROM user_info WHERE id = ?", [info_id])
-      .then(([results]) => {
-        if (results.affectedRows != 0) {
-          return res.json({ error: 0, message: "User info deleted successfully" });
-        } else {
-          return res.status(404).json({ error: 1, message: "User info not found" });
-        }
-      })
-      .catch((error) => {
-        res.status(500).json({ error: 1, message: "Error deleting user info" });
-        console.error(error); // Log the actual error
-      });
+  const info_id = req.query.id; // Access user_id from URL params
+  console.log(info_id);
+  pool
+    .query("DELETE FROM user_info WHERE id = ?", [info_id])
+    .then(([results]) => {
+      if (results.affectedRows != 0) {
+        return res.json({
+          error: 0,
+          message: "User info deleted successfully",
+        });
+      } else {
+        return res
+          .status(404)
+          .json({ error: 1, message: "User info not found" });
+      }
+    })
+    .catch((error) => {
+      res.status(500).json({ error: 1, message: "Error deleting user info" });
+      console.error(error); // Log the actual error
+    });
 };
